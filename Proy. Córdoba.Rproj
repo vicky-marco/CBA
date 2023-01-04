@@ -1,13 +1,348 @@
-Version: 1.0
 
-RestoreWorkspace: Default
-SaveWorkspace: Default
-AlwaysSaveHistory: Default
 
-EnableCodeIndexing: Yes
-UseSpacesForTab: Yes
-NumSpacesForTab: 2
-Encoding: UTF-8
+---
+title: "Primeros pasos"
+output: html_document
+date: "2022-10-06"
+---
 
-RnwWeave: Sweave
-LaTeX: pdfLaTeX
+```{r}
+data_properati <- read.csv("properati_CBA.csv")
+```
+
+
+```{r}
+library(tidyverse)
+```
+```{r}
+library(sf)
+```
+
+
+```{r}
+CPC <- read_sf ("area_cpc.kml")
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = CPC) + 
+  labs(title = "CPC Córdoba") + 
+  theme_minimal() 
+```
+
+```{r}
+Radios <- read_sf ("radios.kml")
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = Radios) + 
+  labs(title = "Radios Córdoba") + 
+  theme_minimal() 
+```
+
+```{r}
+CPC_union <-st_intersection(Radios, CPC)
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = CPC_union) + 
+  labs(title = "Radios Córdoba") + 
+  theme_minimal() 
+```
+
+```{r}
+data_properati_short <- data_properati %>% 
+  select(id, operation, inicio_vigencia, fin_vigencia, type, lat, lon, ambientes, habitaciones, banos, superficie_cubierta, superficie_total, precio, moneda)
+```
+
+
+```{r}
+library(stringr)
+```
+
+```{r}
+library(tidyr)
+```
+
+```{r}
+library(dplyr)
+```
+
+```{r}
+data_properati_short_2 <- data_properati_short %>% 
+  separate(fin_vigencia, c("Año", "Mes", "Dia"), sep = "-") %>%
+  filter(!is.na(lat), !is.na(lon)) %>%
+  filter(!is.na(precio)) %>%
+  filter(!is.na(superficie_total)) %>%
+  filter(!is.na(moneda)) %>%
+  filter(type %in% c("Departamento" , "Casa", "PH"))
+```
+
+Data_properati_short usar para Oficias después
+Explorar tipologías no residenciales 
+
+```{r}
+summary(data_properati_short_2$type)
+```
+
+```{r}
+library(plyr)
+```
+
+```{r}
+tabla <- data_properati_short_2 %>%
+  count("moneda")
+```
+
+```{r}
+venta_USD <- data_properati_short_2 %>%
+  filter(moneda=="USD") %>%
+  mutate(valor_m2= precio/superficie_total)
+```
+
+
+```{r}
+library(ggplot2)
+```
+
+```{r}
+venta_USD_geom <- st_as_sf(venta_USD,coords = c("lon", "lat"), crs = 4326)
+```
+
+```{r}
+ggplot()+
+  geom_sf(data=Radios)+
+  geom_sf(data=venta_USD_geom)+
+  scale_fill_viridis_c()
+```
+Hay puntos fuera del mapa, así que se "recortan" los datos de la siguiente manera.
+
+```{r}
+venta_USD_geom_Municipio <-st_intersection(venta_USD_geom, CPC)
+```
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=venta_USD_geom_Municipio, aes(color=as.numeric(valor_m2)))+
+  scale_fill_viridis_c()
+```
+Tenemos un valor por arriba de los 200.000 que sesga todo.
+
+```{r}
+venta_USD_geom_Municipio <- venta_USD_geom_Municipio %>%
+  filter(valor_m2<100000)
+```
+
+```{r}
+tabla_2 <- venta_USD_geom_Municipio %>%
+  group_by() %>%
+  summarise(max(valor_m2))
+```
+
+El valor es 99.459,28
+
+```{r}
+venta_USD_geom_Municipio <- venta_USD_geom_Municipio %>%
+  filter(valor_m2<40000)
+```
+
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=venta_USD_geom_Municipio, aes(color=as.numeric(valor_m2)))+
+  scale_fill_viridis_c()
+```
+```{r}
+tabla_2 <- venta_USD_geom_Municipio %>%
+  group_by() %>%
+  summarise(max(valor_m2))
+```
+
+
+```{r}
+ggplot(venta_USD_geom_Municipio)+
+  geom_histogram(aes(x=valor_m2), bins = 1000)
+```
+```{r}
+ggplot(venta_USD_geom_Municipio)+
+  geom_histogram(aes(x=valor_m2), bins = 1000)
+```
+
+Filtro en 5.000, se eliminaron 30 observaciones
+
+```{r}
+venta_USD_geom_Municipio_filtrado2 <- venta_USD_geom_Municipio %>%
+  filter(valor_m2<1388)
+```
+
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=venta_USD_geom_Municipio_filtrado,aes(color=as.numeric(valor_m2)), alpha=0.6)+
+    labs(title = "Valor del metro cuadrado en dólares en Córdoba",
+        color = "Valor metro cuadrado",
+         caption= "Fuente: Properati") +
+  scale_fill_viridis_c(breaks=c(1000, 2000, 3000, 4000, 5000))+
+  theme_minimal()
+```
+
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=venta_USD_geom_Municipio_filtrado2,aes(color=as.numeric(valor_m2)), alpha=0.6)+
+    labs(title = "Valor del metro cuadrado en dólares en Córdoba",
+        color = "Valor metro cuadrado",
+         caption= "Fuente: Properati") +
+  scale_fill_viridis_c(breaks=c(500, 1000, 1388))+
+  theme_minimal()
+```
+
+```{r}
+oficinas <- data_properati_short %>% 
+  separate(fin_vigencia, c("Año", "Mes", "Dia"), sep = "-") %>%
+  filter(!is.na(lat), !is.na(lon)) %>%
+  filter(!is.na(precio)) %>%
+  filter(!is.na(superficie_total)) %>%
+  filter(!is.na(moneda)) %>%
+  filter(type %in% c("Oficina"))
+```
+
+```{r}
+oficinas <- st_as_sf(oficinas, coords = c("lon", "lat"), crs = 4326)
+```
+
+```{r}
+oficinas <- oficinas %>%
+  filter(moneda=="USD") %>%
+  mutate(valor_m2= precio/superficie_total)
+```
+
+```{r}
+oficinas_intersection <-st_intersection(oficinas, CPC)
+```
+```{r}
+oficinas_18_22 <- oficinas %>%
+ filter(Año %in% c("2018" , "2022"))
+```
+
+```{r}
+oficinas_18 <- oficinas_intersection %>%
+ filter(Año %in% c("2018"))
+```
+
+
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=oficinas_18,aes(color=as.numeric(valor_m2)), alpha=0.6)+
+    labs(title = "Valor del metro cuadrado de oficinas en dólares en Córdoba (año 2018)",
+        color = "Valor metro cuadrado",
+         caption= "Fuente: Properati") +
+  theme_minimal()
+```
+
+```{r}
+oficinas_22 <- oficinas_intersection %>%
+ filter(Año %in% c("2022"))
+```
+
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=oficinas_22,aes(color=as.numeric(valor_m2)), alpha=0.6)+
+    labs(title = "Valor del metro cuadrado de oficinas en dólares en Córdoba (año 2022)",
+        color = "Valor metro cuadrado",
+         caption= "Fuente: Properati") +
+  theme_minimal()
+```
+```{r}
+summary(oficinas_18$valor_m2)
+```
+
+```{r}
+summary(oficinas_22$valor_m2)
+```
+Bajó el valor del m2 en oficianas
+
+
+```{r}
+ggplot(oficinas_intersection)+
+  geom_histogram(aes(x=valor_m2), bins = 1000)
+```
+
+```{r}
+summary(oficinas_intersection$valor_m2)
+```
+Como el 3er cuartil arranca en 1470, corté en 1500
+
+```{r}
+oficinas_intersection <- oficinas_intersection %>%
+  filter(valor_m2<1500)
+```
+
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=oficinas_intersection,aes(color=as.numeric(valor_m2)), alpha=0.6)+
+    labs(title = "Valor del metro cuadrado de oficinas en dólares en Córdoba",
+         subtitle = "Hasta 1.500 USD (3er cuartil)",
+        color = "Valor metro cuadrado",
+         caption= "Fuente: Properati") +
+  theme_minimal()
+```
+
+```{r}
+locales <- data_properati_short %>% 
+  separate(fin_vigencia, c("Año", "Mes", "Dia"), sep = "-") %>%
+  filter(!is.na(lat), !is.na(lon)) %>%
+  filter(!is.na(precio)) %>%
+  filter(!is.na(superficie_total)) %>%
+  filter(!is.na(moneda)) %>%
+  filter(type %in% c("Local comercial"))
+```
+
+```{r}
+locales <- st_as_sf(locales, coords = c("lon", "lat"), crs = 4326)
+```
+
+```{r}
+locales <- locales %>%
+  filter(moneda=="USD") %>%
+  mutate(valor_m2= precio/superficie_total)
+```
+
+```{r}
+locales <-st_intersection(locales, CPC)
+```
+```{r}
+summary(locales$valor_m2)
+```
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=locales,aes(color=as.numeric(valor_m2)), alpha=0.6)+
+    labs(title = "Valor del metro cuadrado de local comercial en dólares en Córdoba",
+        color = "Valor metro cuadrado",
+         caption= "Fuente: Properati") +
+  theme_minimal()
+```
+Como el 3er cuartil arranca en 1790, corté en 1800
+
+```{r}
+locales_1800 <- locales %>%
+  filter(valor_m2<1800)
+```
+
+```{r}
+ggplot()+
+  geom_sf(data=CPC_union)+
+  geom_sf(data=locales_1800,aes(color=as.numeric(valor_m2)), alpha=0.6)+
+    labs(title = "Valor del metro cuadrado de local comercial en dólares en Córdoba",
+         subtitle = "Hasta 1800 USD (3er cuartil)", 
+        color = "Valor metro cuadrado",
+         caption= "Fuente: Properati") +
+  theme_minimal()
+```
+
